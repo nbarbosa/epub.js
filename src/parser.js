@@ -207,12 +207,14 @@ EPUBJS.Parser.prototype.manifest = function(manifestXml){
 	items.forEach(function(item){
 		var id = item.getAttribute('id'),
 				href = item.getAttribute('href') || '',
+				mediaOverlay = item.getAttribute('media-overlay') || '',
 				type = item.getAttribute('media-type') || '',
 				properties = item.getAttribute('properties') || '';
 
 		manifest[id] = {
 			'href' : href,
 			'url' : baseUrl + href, //-- Absolute URL for loading with a web worker
+			'mediaOverlay' : mediaOverlay,
 			'type' : type,
       'properties' : properties
 		};
@@ -244,6 +246,7 @@ EPUBJS.Parser.prototype.spine = function(spineXml, manifest){
 		var vert = {
 			'id' : Id,
 			'linear' : item.getAttribute('linear') || '',
+			'mediaOverlay' : manifest[Id].mediaOverlay,
 			'properties' : propArray,
 			'manifestProperties' : manifestPropArray,
 			'href' : manifest[Id].href,

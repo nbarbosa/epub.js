@@ -29,7 +29,7 @@ EPUBJS.Unarchiver.prototype.getXml = function(url, encoding){
 			then(function(text){
 				var parser = new DOMParser();
 				var mimeType = EPUBJS.core.getMimeType(url);
-				return parser.parseFromString(text, mimeType);
+				return parser.parseFromString(text.trimLeft(), mimeType);
 			});
 
 };

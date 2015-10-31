@@ -141,6 +141,7 @@ EPUBJS.replace.cssUrls = function(_store, base, text){
 
 	matches.forEach(function(str){
 		var full = EPUBJS.core.resolveUrl(base, str.replace(/url\(|[|\)|\'|\"]/g, ''));
+		full = EPUBJS.core.uri(full).path;
 		var replaced = _store.getUrl(full).then(function(url){
 			text = text.replace(str, 'url("'+url+'")');
 		}, function(reason) {
