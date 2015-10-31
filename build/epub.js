@@ -2468,10 +2468,10 @@ EPUBJS.Book.prototype.displayChapter = function(chap, end, deferred){
                     var file =  split[split.length -1];
                     doc.querySelectorAll('audio')[i].setAttribute('src', file);
                     var blob = new Blob([doc.documentElement.outerHTML], { type: 'text/xml'});
-                    var uri = URL.createObjectURL(blob);
+                    var _URL = window.URL || window.webkitURL || window.mozURL;
+                    var uri = _URL.createObjectURL(blob);
                     book.manifest[chapter.mediaOverlay].url = uri;
                     chapter.mediaOverlayURI = uri;
-                    
                   });
                 })(i);
             }
