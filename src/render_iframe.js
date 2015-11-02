@@ -68,7 +68,9 @@ EPUBJS.Render.Iframe.prototype.load = function(contents, url){
 			render.docEl.style.right = "0";
 		}
 
-		deferred.resolve(render.docEl);
+		setTimeout(function () {
+	      deferred.resolve(render.docEl);  
+	    }, 6);
 	};
 
 	this.iframe.onerror = function(e) {
@@ -91,7 +93,21 @@ EPUBJS.Render.Iframe.prototype.load = function(contents, url){
   this.document.write(contents);
   this.document.close();
 
-	return deferred.promise;
+  // this will make sure rendering is consistent with contents (document.write affects structure)
+  var doc = new DOMParser().parseFromString(contents, "application/xhtml+xml");
+  
+  var origBody = doc.getElementsByTagName('body')[0];
+  var body = this.document.getElementsByTagName('body')[0];
+
+  if (origBody.innerHTML !== body.innerHTML) {
+    if (!doc.body) {
+     this.document.body.innerHTML = origBody.innerHTML;
+    } else {
+      this.document.body = origBody;
+    }
+  }
+
+  return deferred.promise;
 };
 
 

@@ -799,7 +799,7 @@ EPUBJS.Book.prototype.displayChapter = function(chap, end, deferred){
 
         if (chapter.mediaOverlay) {
           this.loadXml(book.manifest[chapter.mediaOverlay].url).then(function (doc) {
-
+          
             for (var i=0; i < doc.querySelectorAll('audio').length; i++) {
               var path = EPUBJS.core.uri(root + doc.querySelectorAll('audio')[i].getAttribute('src').replace('../', '')).path;
               
@@ -807,10 +807,16 @@ EPUBJS.Book.prototype.displayChapter = function(chap, end, deferred){
                   book.store.getUrl(path).then(function (url) {
                     var split = url.split('/');
                     var file =  split[split.length -1];
+
                     doc.querySelectorAll('audio')[i].setAttribute('src', file);
-                    var blob = new Blob([doc.documentElement.outerHTML], { type: 'text/xml'});
+                    
+                    var serializer = new XMLSerializer();
+                    var contents = serializer.serializeToString(doc);
+                    
+                    var blob = new Blob([contents], { type: 'text/xml'});
                     var _URL = window.URL || window.webkitURL || window.mozURL;
                     var uri = _URL.createObjectURL(blob);
+                    
                     book.manifest[chapter.mediaOverlay].url = uri;
                     chapter.mediaOverlayURI = uri;
                   });

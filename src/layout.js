@@ -153,7 +153,7 @@ EPUBJS.Layout.Fixed.prototype.format = function(documentElement, _width, _height
 	documentElement.style[columnWidth] = "auto";
 
 	//-- Scroll
-	// documentElement.style.overflow = "auto";
+	documentElement.style.overflow = "hidden";
 
 	this.colWidth = width;
 	this.gap = 0;

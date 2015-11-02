@@ -2458,7 +2458,7 @@ EPUBJS.Book.prototype.displayChapter = function(chap, end, deferred){
 
         if (chapter.mediaOverlay) {
           this.loadXml(book.manifest[chapter.mediaOverlay].url).then(function (doc) {
-
+          
             for (var i=0; i < doc.querySelectorAll('audio').length; i++) {
               var path = EPUBJS.core.uri(root + doc.querySelectorAll('audio')[i].getAttribute('src').replace('../', '')).path;
               
@@ -2466,10 +2466,16 @@ EPUBJS.Book.prototype.displayChapter = function(chap, end, deferred){
                   book.store.getUrl(path).then(function (url) {
                     var split = url.split('/');
                     var file =  split[split.length -1];
+
                     doc.querySelectorAll('audio')[i].setAttribute('src', file);
-                    var blob = new Blob([doc.documentElement.outerHTML], { type: 'text/xml'});
+                    
+                    var serializer = new XMLSerializer();
+                    var contents = serializer.serializeToString(doc);
+                    
+                    var blob = new Blob([contents], { type: 'text/xml'});
                     var _URL = window.URL || window.webkitURL || window.mozURL;
                     var uri = _URL.createObjectURL(blob);
+                    
                     book.manifest[chapter.mediaOverlay].url = uri;
                     chapter.mediaOverlayURI = uri;
                   });
@@ -4925,7 +4931,7 @@ EPUBJS.Layout.Fixed.prototype.format = function(documentElement, _width, _height
 	documentElement.style[columnWidth] = "auto";
 
 	//-- Scroll
-	// documentElement.style.overflow = "auto";
+	documentElement.style.overflow = "hidden";
 
 	this.colWidth = width;
 	this.gap = 0;
@@ -5792,7 +5798,9 @@ EPUBJS.Render.Iframe.prototype.load = function(contents, url){
 			render.docEl.style.right = "0";
 		}
 
-		deferred.resolve(render.docEl);
+		setTimeout(function () {
+	      deferred.resolve(render.docEl);  
+	    }, 6);
 	};
 
 	this.iframe.onerror = function(e) {
@@ -5815,7 +5823,21 @@ EPUBJS.Render.Iframe.prototype.load = function(contents, url){
   this.document.write(contents);
   this.document.close();
 
-	return deferred.promise;
+  // this will make sure rendering is consistent with contents (document.write affects structure)
+  var doc = new DOMParser().parseFromString(contents, "application/xhtml+xml");
+  
+  var origBody = doc.getElementsByTagName('body')[0];
+  var body = this.document.getElementsByTagName('body')[0];
+
+  if (origBody.innerHTML !== body.innerHTML) {
+    if (!doc.body) {
+     this.document.body.innerHTML = origBody.innerHTML;
+    } else {
+      this.document.body = origBody;
+    }
+  }
+
+  return deferred.promise;
 };
 
 
@@ -7682,7 +7704,7 @@ EPUBJS.Unarchiver.prototype.getXml = function(url, encoding){
 			then(function(text){
 				var parser = new DOMParser();
 				var mimeType = EPUBJS.core.getMimeType(url);
-				return parser.parseFromString(text.trimLeft(), mimeType);
+				return parser.parseFromString(text.trim(), mimeType);
 			});
 
 };
