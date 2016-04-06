@@ -2489,6 +2489,7 @@ EPUBJS.Book.prototype.displayChapter = function(chap, end, deferred){
     }
 
 	if(this._needsAssetReplacement()) {
+        var root = EPUBJS.core.uri(chapter.absolute).directory;
 
         if (chapter.mediaOverlay) {
           this.loadXml(book.manifest[chapter.mediaOverlay].url).then(function (doc) {
