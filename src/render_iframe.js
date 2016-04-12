@@ -97,7 +97,7 @@ EPUBJS.Render.Iframe.prototype.load = function(contents, url){
   var doc = new DOMParser().parseFromString(contents, "application/xhtml+xml");
   
   var origBody = doc.getElementsByTagName('body')[0];
-  var body = this.document.getElementsByTagName('body')[0];
+  var body = this.bodyEl;
 
   if (origBody.innerHTML !== body.innerHTML) {
     if (!doc.body) {

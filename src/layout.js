@@ -149,11 +149,6 @@ EPUBJS.Layout.Fixed.prototype.format = function(documentElement, _width, _height
 	documentElement.style.width =  width + "px" || "auto";
 	documentElement.style.height =  height + "px" || "auto";
 	
-	//-- Scale to fit container
-	var scale = (_width + _height) / (parseInt(width) + parseInt(height));
-	documentElement.style.transform = 'scale(' + scale + ')';
-	documentElement.style.transformOrigin = '0 0';
-
 	//-- Remove columns
 	documentElement.style[columnWidth] = "auto";
 
