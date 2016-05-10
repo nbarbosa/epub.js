@@ -4823,6 +4823,17 @@ EPUBJS.Hooks = (function(){
 
 EPUBJS.Layout = EPUBJS.Layout || {};
 
+// EPUB2 documents won't provide us with "rendition:layout", so this is used to
+// duck type the documents instead.
+EPUBJS.Layout.isFixedLayout = function (documentElement) {
+	var viewport = documentElement.querySelector("[name=viewport]");
+	if (!viewport || !viewport.hasAttribute("content")) {
+		return false;
+	}
+	var content = viewport.getAttribute("content");
+	return /,/.test(content);
+};
+
 EPUBJS.Layout.Reflowable = function(){
 	this.documentElement = null;
 	this.spreadWidth = null;
@@ -4948,6 +4959,8 @@ EPUBJS.Layout.Fixed = function(){
 
 EPUBJS.Layout.Fixed.prototype.format = function(documentElement, _width, _height, _gap){
 	var columnWidth = EPUBJS.core.prefixed('columnWidth');
+	var transform = EPUBJS.core.prefixed('transform');
+	var transformOrigin = EPUBJS.core.prefixed('transformOrigin');
 	var viewport = documentElement.querySelector("[name=viewport]");
 	var content;
 	var contents;
@@ -4967,6 +4980,17 @@ EPUBJS.Layout.Fixed.prototype.format = function(documentElement, _width, _height
 			height = contents[1].replace("height=", '');
 		}
 	}
+
+	//-- Scale fixed documents so their contents don't overflow, and
+	// vertically and horizontally center the contents
+	var widthScale = _width / width;
+	var heightScale = _height / height;
+	var scale = widthScale < heightScale ? widthScale : heightScale;
+	documentElement.style.position = "absolute";
+	documentElement.style.top = "50%";
+	documentElement.style.left = "50%";
+	documentElement.style[transform] = "scale(" + scale + ") translate(-50%, -50%)";
+	documentElement.style[transformOrigin] = "0px 0px 0px";
 
 	//-- Adjust width and height
 	documentElement.style.width =  width + "px" || "auto";
@@ -5464,25 +5488,129 @@ EPUBJS.Parser.prototype.metadata = function(xml){
 	var metadata = {},
 			p = this;
 
+	// Metadata node's parent node is the package node
+	metadata.epub_version = xml.parentNode.getAttribute('version') || undefined;
 	metadata.bookTitle = p.getElementText(xml, 'title');
-	metadata.creator = p.getElementText(xml, 'creator');
 	metadata.description = p.getElementText(xml, 'description');
-
+	metadata.subject = p.getElementText(xml, 'subject');
 	metadata.pubdate = p.getElementText(xml, 'date');
-
 	metadata.publisher = p.getElementText(xml, 'publisher');
-
 	metadata.identifier = p.getElementText(xml, "identifier");
 	metadata.language = p.getElementText(xml, "language");
 	metadata.rights = p.getElementText(xml, "rights");
+
+	//-- There may be multiple authors
+	metadata.creators = [];
+	var creators = p.getElement(xml,'creator');
+	if (creators !== null) {
+
+	creators = Array.prototype.slice.call(creators);
+
+	creators.forEach(function (item) {
+	  var creator = {};
+	  creator.id = item.getAttribute('id');
+	  creator.name = item.childNodes[0] !== undefined ? item.childNodes[0].nodeValue : '';
+	  //-- Get details of resource, such as "<meta refines="#creator01" property="role" scheme="marc:relators">aut</meta>"
+	  creator.details = p.getMetadataRefinesByResourceId(xml, creator.id);
+
+	  metadata.creators.push(creator);
+	});
+	}
+
+	//-- There may be multiple contributors
+	metadata.contributors = [];
+
+	var contributors = p.getElement(xml,'contributor');
+	if (contributors !== null) {
+	contributors = Array.prototype.slice.call(contributors);
+
+	contributors.forEach(function (item) {
+	  var contributor = {};
+	  contributor.id = item.getAttribute('id');
+	  contributor.name = item.childNodes[0] !== undefined ? item.childNodes[0].nodeValue : '';
+	  //-- Get details of resource, such as "<meta refines="#contributor01" property="role" scheme="marc:relators">ill</meta>"
+	  contributor.details =  p.getMetadataRefinesByResourceId(xml, contributor.id);
+
+	  metadata.contributors.push(contributor);
+	});
+	}
+
+	//-- Include "prefixed" metadata. i.e. metadata from specific vocabularies
+	metadata.prefixed = p.getPrefixedMetadata(xml);
 
 	metadata.modified_date = p.querySelectorText(xml, "meta[property='dcterms:modified']");
 	metadata.layout = p.querySelectorText(xml, "meta[property='rendition:layout']");
 	metadata.orientation = p.querySelectorText(xml, "meta[property='rendition:orientation']");
 	metadata.spread = p.querySelectorText(xml, "meta[property='rendition:spread']");
+	metadata.media_overlay_active_class = p.querySelectorText(xml, "meta[property='media:active-class']");
 
 	return metadata;
 };
+
+EPUBJS.Parser.prototype.getMetadataRefinesByResourceId = function (xml, resourceId) {
+    var metaRefines = xml.querySelectorAll('meta[refines="#' + resourceId + '"]');
+
+    var items = Array.prototype.slice.call(metaRefines);
+
+    var properties = [];
+
+    items.forEach(function (item) {
+      var attributes = Array.prototype.slice.call(item.attributes);
+      var property = {};
+      attributes.forEach(function (attr) {
+        property[attr.nodeName] = attr.nodeValue;
+      });
+
+      property.value = item.childNodes[0] !== undefined ? item.childNodes[0].nodeValue : '';
+      
+      properties.push(property);
+
+    });
+
+    return properties;
+
+};
+
+EPUBJS.Parser.prototype.getPrefixedMetadata = function (xml) {
+
+    var metas = xml.querySelectorAll('meta[property]');
+    metas = Array.prototype.slice.call(metas);
+    var prefixedMetadata = {};
+    metas.forEach(function (item) {
+      var property = item.getAttribute('property');
+      var propertyNameStrStart = property.indexOf(':');
+      var vocabulary = property.substring(0, propertyNameStrStart);
+      
+      //-- Check whether a vocabulary standard exists
+      if (vocabulary !== '') {
+        //-- Only add the vocabulary if not yet added
+        if (!prefixedMetadata.hasOwnProperty(vocabulary)) {
+          Object.defineProperty(prefixedMetadata, vocabulary, {
+            value: []
+          });
+        }
+
+        //-- +1 to start from after ":" e.g. media:duration
+        var propertyName = property.substring(propertyNameStrStart + 1);
+        var metadata = {};
+        var attributes = Array.prototype.slice.call(item.attributes);
+        var property = {};
+        attributes.forEach(function (attr) {
+          Object.defineProperty(property, attr.nodeName, {
+            value: attr.nodeValue
+          });
+        });
+        property.propertyName = propertyName;
+        property.value = item.childNodes[0] !== undefined ? item.childNodes[0].nodeValue : '';
+
+        prefixedMetadata[vocabulary].push(property);
+
+      }
+    });
+    
+    return prefixedMetadata;
+};
+
 
 //-- Find Cover: <item properties="cover-image" id="ci" href="cover.svg" media-type="image/svg+xml" />
 //-- Fallback for Epub 2.0
@@ -5519,6 +5647,20 @@ EPUBJS.Parser.prototype.getElementText = function(xml, tag){
 	}
 
 	return '';
+
+};
+
+
+EPUBJS.Parser.prototype.getElement = function(xml, tag){
+  var found = xml.getElementsByTagNameNS("http://purl.org/dc/elements/1.1/", tag),
+    el;
+
+  if(!found || found.length === 0){ 
+    return null;
+  } else {
+    el = found;
+    return el;
+  }
 
 };
 
@@ -5862,9 +6004,7 @@ EPUBJS.Render.Iframe.prototype.load = function(contents, url){
 			render.docEl.style.right = "0";
 		}
 
-		setTimeout(function () {
-	      deferred.resolve(render.docEl);  
-	    }, 6);
+		deferred.resolve(render.docEl);
 	};
 
 	this.iframe.onerror = function(e) {
@@ -5970,8 +6110,10 @@ EPUBJS.Render.Iframe.prototype.setDirection = function(direction){
 	// Undo previous changes if needed
 	if(this.docEl && this.docEl.dir == "rtl"){
 		this.docEl.dir = "rtl";
-		this.docEl.style.position = "static";
-		this.docEl.style.right = "auto";
+		if (this.layout !== "pre-paginated") {
+			this.docEl.style.position = "static";
+			this.docEl.style.right = "auto";
+		}
 	}
 
 };
@@ -5987,6 +6129,10 @@ EPUBJS.Render.Iframe.prototype.setLeft = function(leftPos){
 		this.document.defaultView.scrollTo(leftPos, 0);
 	}
 
+};
+
+EPUBJS.Render.Iframe.prototype.setLayout = function (layout) {
+	this.layout = layout;
 };
 
 EPUBJS.Render.Iframe.prototype.setStyle = function(style, val, prefixed){
@@ -6187,7 +6333,7 @@ EPUBJS.Renderer.prototype.initialize = function(element, width, height){
 		this.render.resize('100%', '100%');
 	}
 
-	document.addEventListener("orientationchange", this.onResized);
+	document.addEventListener("orientationchange", this.onResized.bind(this));
 };
 
 /**
@@ -6261,6 +6407,25 @@ EPUBJS.Renderer.prototype.load = function(contents, url){
 	this.visible(false);
 
 	this.render.load(contents, url).then(function(contents) {
+
+		// Duck-type fixed layout books.
+		if (EPUBJS.Layout.isFixedLayout(contents)) {
+			this.layoutSettings.layout = "pre-paginated";
+			this.layoutMethod = this.determineLayout(this.layoutSettings);
+			this.layout = new EPUBJS.Layout[this.layoutMethod]();
+		}
+		this.render.setLayout(this.layoutSettings.layout);
+
+		// HTML element must have direction set if RTL or columnns will
+		// not be in the correct direction in Firefox
+		// Firefox also need the html element to be position right
+		if(this.render.direction == "rtl" && this.render.docEl.dir != "rtl"){
+			this.render.docEl.dir = "rtl";
+			if (this.render.layout !== "pre-paginated") {
+				this.render.docEl.style.position = "absolute";
+				this.render.docEl.style.right = "0";
+			}
+		}
 
 		this.afterLoad(contents);
 
@@ -6819,7 +6984,9 @@ EPUBJS.Renderer.prototype.mapPage = function(){
 	// Set back to ltr before sprinting to get correct order
 	if(dir == "rtl") {
 		docEl.dir = "ltr";
-		docEl.style.position = "static";
+		if (this.layoutSettings.layout !== "pre-paginated") {
+			docEl.style.position = "static";
+		}
 	}
 
 	this.textSprint(root, check);
@@ -6827,8 +6994,10 @@ EPUBJS.Renderer.prototype.mapPage = function(){
 	// Reset back to previous RTL settings
 	if(dir == "rtl") {
 		docEl.dir = dir;
-		docEl.style.left = "auto";
-		docEl.style.right = "0";
+		if (this.layoutSettings.layout !== "pre-paginated") {
+			docEl.style.left = "auto";
+			docEl.style.right = "0";
+		}
 	}
 
 	// Check the remaining children that fit on this page

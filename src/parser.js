@@ -143,25 +143,129 @@ EPUBJS.Parser.prototype.metadata = function(xml){
 	var metadata = {},
 			p = this;
 
+	// Metadata node's parent node is the package node
+	metadata.epub_version = xml.parentNode.getAttribute('version') || undefined;
 	metadata.bookTitle = p.getElementText(xml, 'title');
-	metadata.creator = p.getElementText(xml, 'creator');
 	metadata.description = p.getElementText(xml, 'description');
-
+	metadata.subject = p.getElementText(xml, 'subject');
 	metadata.pubdate = p.getElementText(xml, 'date');
-
 	metadata.publisher = p.getElementText(xml, 'publisher');
-
 	metadata.identifier = p.getElementText(xml, "identifier");
 	metadata.language = p.getElementText(xml, "language");
 	metadata.rights = p.getElementText(xml, "rights");
+
+	//-- There may be multiple authors
+	metadata.creators = [];
+	var creators = p.getElement(xml,'creator');
+	if (creators !== null) {
+
+	creators = Array.prototype.slice.call(creators);
+
+	creators.forEach(function (item) {
+	  var creator = {};
+	  creator.id = item.getAttribute('id');
+	  creator.name = item.childNodes[0] !== undefined ? item.childNodes[0].nodeValue : '';
+	  //-- Get details of resource, such as "<meta refines="#creator01" property="role" scheme="marc:relators">aut</meta>"
+	  creator.details = p.getMetadataRefinesByResourceId(xml, creator.id);
+
+	  metadata.creators.push(creator);
+	});
+	}
+
+	//-- There may be multiple contributors
+	metadata.contributors = [];
+
+	var contributors = p.getElement(xml,'contributor');
+	if (contributors !== null) {
+	contributors = Array.prototype.slice.call(contributors);
+
+	contributors.forEach(function (item) {
+	  var contributor = {};
+	  contributor.id = item.getAttribute('id');
+	  contributor.name = item.childNodes[0] !== undefined ? item.childNodes[0].nodeValue : '';
+	  //-- Get details of resource, such as "<meta refines="#contributor01" property="role" scheme="marc:relators">ill</meta>"
+	  contributor.details =  p.getMetadataRefinesByResourceId(xml, contributor.id);
+
+	  metadata.contributors.push(contributor);
+	});
+	}
+
+	//-- Include "prefixed" metadata. i.e. metadata from specific vocabularies
+	metadata.prefixed = p.getPrefixedMetadata(xml);
 
 	metadata.modified_date = p.querySelectorText(xml, "meta[property='dcterms:modified']");
 	metadata.layout = p.querySelectorText(xml, "meta[property='rendition:layout']");
 	metadata.orientation = p.querySelectorText(xml, "meta[property='rendition:orientation']");
 	metadata.spread = p.querySelectorText(xml, "meta[property='rendition:spread']");
+	metadata.media_overlay_active_class = p.querySelectorText(xml, "meta[property='media:active-class']");
 
 	return metadata;
 };
+
+EPUBJS.Parser.prototype.getMetadataRefinesByResourceId = function (xml, resourceId) {
+    var metaRefines = xml.querySelectorAll('meta[refines="#' + resourceId + '"]');
+
+    var items = Array.prototype.slice.call(metaRefines);
+
+    var properties = [];
+
+    items.forEach(function (item) {
+      var attributes = Array.prototype.slice.call(item.attributes);
+      var property = {};
+      attributes.forEach(function (attr) {
+        property[attr.nodeName] = attr.nodeValue;
+      });
+
+      property.value = item.childNodes[0] !== undefined ? item.childNodes[0].nodeValue : '';
+      
+      properties.push(property);
+
+    });
+
+    return properties;
+
+};
+
+EPUBJS.Parser.prototype.getPrefixedMetadata = function (xml) {
+
+    var metas = xml.querySelectorAll('meta[property]');
+    metas = Array.prototype.slice.call(metas);
+    var prefixedMetadata = {};
+    metas.forEach(function (item) {
+      var property = item.getAttribute('property');
+      var propertyNameStrStart = property.indexOf(':');
+      var vocabulary = property.substring(0, propertyNameStrStart);
+      
+      //-- Check whether a vocabulary standard exists
+      if (vocabulary !== '') {
+        //-- Only add the vocabulary if not yet added
+        if (!prefixedMetadata.hasOwnProperty(vocabulary)) {
+          Object.defineProperty(prefixedMetadata, vocabulary, {
+            value: []
+          });
+        }
+
+        //-- +1 to start from after ":" e.g. media:duration
+        var propertyName = property.substring(propertyNameStrStart + 1);
+        var metadata = {};
+        var attributes = Array.prototype.slice.call(item.attributes);
+        var property = {};
+        attributes.forEach(function (attr) {
+          Object.defineProperty(property, attr.nodeName, {
+            value: attr.nodeValue
+          });
+        });
+        property.propertyName = propertyName;
+        property.value = item.childNodes[0] !== undefined ? item.childNodes[0].nodeValue : '';
+
+        prefixedMetadata[vocabulary].push(property);
+
+      }
+    });
+    
+    return prefixedMetadata;
+};
+
 
 //-- Find Cover: <item properties="cover-image" id="ci" href="cover.svg" media-type="image/svg+xml" />
 //-- Fallback for Epub 2.0
@@ -198,6 +302,20 @@ EPUBJS.Parser.prototype.getElementText = function(xml, tag){
 	}
 
 	return '';
+
+};
+
+
+EPUBJS.Parser.prototype.getElement = function(xml, tag){
+  var found = xml.getElementsByTagNameNS("http://purl.org/dc/elements/1.1/", tag),
+    el;
+
+  if(!found || found.length === 0){ 
+    return null;
+  } else {
+    el = found;
+    return el;
+  }
 
 };
 
