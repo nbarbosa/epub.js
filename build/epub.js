@@ -6032,7 +6032,7 @@ EPUBJS.Render.Iframe.prototype.load = function(contents, url){
     var bodyFromParser = doc.getElementsByTagName('body')[0];
     var writtenBody = this.iframe.contentDocument.body || this.iframe.contentDocument.querySelector("body");
 
-    if (bodyFromParser.innerHTML !== writtenBody.innerHTML) {
+    if (writtenBody === null || bodyFromParser.innerHTML !== writtenBody.innerHTML) {
         writtenBody = bodyFromParser;        
     }
 
