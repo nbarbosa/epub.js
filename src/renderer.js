@@ -764,12 +764,6 @@ EPUBJS.Renderer.prototype.mapPage = function(){
 		prevRange = prevRanges[prevRanges.length-1];
 	}
 
-	if(prevRange){
-		prevRange.collapse(false);
-		cfi = renderer.currentChapter.cfiFromRange(prevRange);
-		map[map.length-1].end = cfi;
-	}
-
 	// Handle empty map
 	if(!map.length) {
 		startRange = this.doc.createRange();
@@ -782,9 +776,13 @@ EPUBJS.Renderer.prototype.mapPage = function(){
 		endRange.collapse(false);
 		endCfi = renderer.currentChapter.cfiFromRange(endRange);
 
-
 		map.push({ start: startCfi, end: endCfi });
+	}
 
+	if(prevRange) {
+		prevRange.collapse(false);
+		cfi = renderer.currentChapter.cfiFromRange(prevRange);
+		map[map.length-1].end = cfi;
 	}
 
 	// clean up
