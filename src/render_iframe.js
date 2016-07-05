@@ -9,6 +9,30 @@ EPUBJS.Render.Iframe = function() {
     this.pageWidth = 0;
 };
 
+EPUBJS.Render.Iframe.prototype._setContent = (function(){
+    var iframeSrcDoc = function (content) {
+        this.iframe.setAttribute("srcdoc", content);
+    };
+
+    var iframeWriteDocument = function (content) {
+        this.iframe.contentDocument.open();
+        this.iframe.contentDocument.write(content);
+        this.iframe.contentDocument.close();
+    
+        // this will make sure rendering is consistent with contents (document.write affects structure)
+        var doc = new DOMParser().parseFromString(contents, "application/xhtml+xml");
+    
+        var bodyFromParser = doc.getElementsByTagName('body')[0];
+        var writtenBody = this.iframe.contentDocument.body || this.iframe.contentDocument.querySelector("body");
+    
+        if (writtenBody === null || bodyFromParser.innerHTML !== writtenBody.innerHTML) {
+            writtenBody.innerHTML = bodyFromParser.innerHTML;        
+        }
+    };
+
+    return !!("srcdoc" in document.createElement("iframe")) ? iframeSrcDoc : iframeWriteDocument;
+})();
+
 //-- Build up any html needed
 EPUBJS.Render.Iframe.prototype.create = function(){
     this.iframe = document.createElement('iframe');
@@ -86,19 +110,7 @@ EPUBJS.Render.Iframe.prototype.load = function(contents, url){
         return deferred.promise;
     }
 
-    this.iframe.contentDocument.open();
-    this.iframe.contentDocument.write(contents);
-    this.iframe.contentDocument.close();
-
-    // this will make sure rendering is consistent with contents (document.write affects structure)
-    var doc = new DOMParser().parseFromString(contents, "application/xhtml+xml");
-
-    var bodyFromParser = doc.getElementsByTagName('body')[0];
-    var writtenBody = this.iframe.contentDocument.body || this.iframe.contentDocument.querySelector("body");
-
-    if (writtenBody === null || bodyFromParser.innerHTML !== writtenBody.innerHTML) {
-        writtenBody = bodyFromParser;        
-    }
+    this._setContent(contents);
 
     return deferred.promise;
 };
