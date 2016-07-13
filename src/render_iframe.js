@@ -182,6 +182,10 @@ EPUBJS.Render.Iframe.prototype.setLeft = function(leftPos){
     // this.docEl.style.marginLeft = -leftPos + "px";
     // this.docEl.style[EPUBJS.Render.Iframe.transform] = 'translate('+ (-leftPos) + 'px, 0)';
 
+    if (this.layout === 'pre-paginated') {
+      return;
+    }
+
     if (this.isMobile) {
         this.docEl.style[this.transform] = 'translate('+ (-leftPos) + 'px, 0)';
     } else {
