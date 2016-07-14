@@ -48,8 +48,9 @@ EPUBJS.Render.Iframe.prototype.load = function(contents, url){
         render.bodyEl = render.document.body || render.document.querySelector("body");
         render.window = render.iframe.contentWindow;
 
-        render.window.addEventListener("resize", render.resized.bind(render), false);
-
+        if (!render.isMobile) {
+          render.window.addEventListener("resize", render.resized.bind(render), false);
+        }
         // Reset the scroll position
         render.leftPos = 0;
         render.setLeft(0);
